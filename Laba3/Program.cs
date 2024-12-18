@@ -1,160 +1,54 @@
-﻿using System;
+﻿using Classes;
+using System;
 using System.Collections.Generic;
-
-public abstract class Card
-{
-    public string Name { get; set; }
-    public string Description { get; set; }
-
-    public Card(string name, string description)
-    {
-        Name = name;
-        Description = description;
-    }
-
-    public abstract void Play();
-}
-
-public class CreatureCard : Card
-{
-    public int Attack { get; set; }
-    public int Health { get; set; }
-
-    public CreatureCard(string name, string description, int attack, int health)
-        : base(name, description)
-    {
-        Attack = attack;
-        Health = health;
-    }
-
-    public override void Play()
-    {
-        Console.WriteLine($"{Name} с атакой {Attack} и здоровьем {Health} разыграна.");
-    }
-}
-
-public class Deck
-{
-    public List<Card> Cards { get; private set; }
-
-    public Deck()
-    {
-        Cards = new List<Card>();
-    }
-
-    public void AddCard(Card card)
-    {
-        Cards.Add(card);
-    }
-
-    public void Shuffle()
-    {
-        Random rng = new Random();
-        int n = Cards.Count;
-        while (n > 1)
-        {
-            int k = rng.Next(n--);
-            Card value = Cards[n];
-            Cards[n] = Cards[k];
-            Cards[k] = value;
-        }
-    }
-
-    public Card DrawCard()
-    {
-        if (Cards.Count == 0) return null;
-        Card card = Cards[0];
-        Cards.RemoveAt(0);
-        return card;
-    }
-}
-
-public abstract class Spell
-{
-    public string Name { get; set; }
-    public string Description { get; set; }
-
-    public Spell(string name, string description)
-    {
-        Name = name;
-        Description = description;
-    }
-
-    public abstract void Cast(Player target, CreatureCard targetCreature = null);
-}
-
-public class HealingSpell : Spell
-{
-    public int HealAmount { get; set; }
-
-    public HealingSpell(string name, string description, int healAmount)
-        : base(name, description)
-    {
-        HealAmount = healAmount;
-    }
-
-    public override void Cast(Player target, CreatureCard targetCreature = null)
-    {
-        if (targetCreature != null)
-        {
-            targetCreature.Health += HealAmount;
-            Console.WriteLine($"{Name} использовано на {targetCreature.Name}! Восстановлено {HealAmount} здоровья. Текущее здоровье: {targetCreature.Health}");
-        }
-        else
-        {
-            target.Health += HealAmount;
-            Console.WriteLine($"{Name} использовано на игрока! Восстановлено {HealAmount} здоровья. Текущее здоровье: {target.Health}");
-        }
-    }
-}
-
-public class DamageSpell : Spell
-{
-    public int DamageAmount { get; set; }
-
-    public DamageSpell(string name, string description, int damageAmount)
-        : base(name, description)
-    {
-        DamageAmount = damageAmount;
-    }
-
-    public override void Cast(Player target, CreatureCard targetCreature = null)
-    {
-        if (targetCreature != null)
-        {
-            targetCreature.Health -= DamageAmount;
-            Console.WriteLine($"{Name} использовано на {targetCreature.Name}! Нанесено {DamageAmount} урона. Текущее здоровье: {targetCreature.Health}");
-        }
-        else
-        {
-            target.Health -= DamageAmount;
-            Console.WriteLine($"{Name} использовано на игрока! Нанесено {DamageAmount} урона. Текущее здоровье: {target.Health}");
-        }
-    }
-}
-
-public class Player
-{
-    public int Health { get; set; }
-    public List<CreatureCard> Creatures { get; set; }
-
-    public Player()
-    {
-        Health = 15; // Начальное здоровье игрока
-        Creatures = new List<CreatureCard>();
-    }
-}
+using System.IO;
 
 public class Program
 {
-    // Массивы с колодами
     private static List<CreatureCard>[] creatureDecks = new List<CreatureCard>[4];
     private static List<Spell>[] spellDecks = new List<Spell>[4];
+    private static Player player1;
+    private static Player player2;
+
+
+    // Список всех доступных заклинаний
+    private static List<Spell> allSpells = new List<Spell>
+    {
+        new HealingSpell("Исцеление", "Восстанавливает 5 здоровья цели.", 5),
+        new DamageSpell("Огненный шар", "Наносит 7 урона врагу.", 7),
+        new HealingSpell("Лечение", "Восстанавливает 4 здоровья союзнику.", 4),
+        new DamageSpell("Молния", "Наносит 6 урона врагу.", 6),
+        new HealingSpell("Светлое исцеление", "Восстанавливает 8 здоровья цели.", 8),
+        new DamageSpell("Ледяной шторм", "Наносит 5 урона врагу и замедляет его.", 5),
+        new HealingSpell("Божественное исцеление", "Восстанавливает 4 здоровья цели.", 4),
+        new DamageSpell("Теневой удар", "Наносит 7 урона врагу.", 7)
+       
+    };
 
     public static void Main(string[] args)
     {
+        // Вывод правил игры
+        DisplayGameRules();
+
         // Инициализация колод
         InitializeDecks();
+
+        // Проверка наличия сохраненной игры
+        if (File.Exists("SaveStats.txt"))
+        {
+            Console.WriteLine("Найдена сохраненная игра. Хотите продолжить? (y/n)");
+            string choice = Console.ReadLine();
+            if (choice.ToLower() == "y")
+            {
+                player1 = new Player();
+
+                player2 = new Player();
+                LoadGame();
+                Console.WriteLine("Игра загружена. Начинаем игровой цикл...");
+                StartGameLoop();
+                return; // Завершаем выполнение Main, так как игра уже загружена
+            }
+        }
 
         // Выбор колод игроками
         int player1DeckIndex = ChooseDeck(1);
@@ -174,8 +68,8 @@ public class Program
         List<Spell> player2Spells = spellDecks[player2DeckIndex];
 
         // Создание игроков
-        Player player1 = new Player();
-        Player player2 = new Player();
+        player1 = new Player();
+        player2 = new Player();
 
         // Вывод доступных существ и заклинаний
         DisplayAvailableCards(player1Deck, player1Spells, 1);
@@ -200,6 +94,9 @@ public class Program
                 PlayerTurn(player2, player2Deck, player2Spells, player1);
                 firstPlayer = 1; // Передаем ход игроку 1
             }
+
+            // Сохранение состояния игры после каждого хода
+            SaveGame();
 
             // Проверка условий окончания игры
             if (IsGameOver(player1, player2))
@@ -227,6 +124,173 @@ public class Program
         Console.WriteLine("Игра окончена!");
     }
 
+    private static List<Spell> player1Spells;
+    private static List<Spell> player2Spells;
+    private static List<CreatureCard> player1Deck;
+    private static List<CreatureCard> player2Deck;
+
+    private static void StartGameLoop()
+    {
+        // Определение, кто начинает первым
+        int firstPlayer = DetermineFirstPlayer();
+
+        // Основной игровой цикл
+        bool gameRunning = true;
+        while (gameRunning)
+        {
+            if (firstPlayer == 1)
+            {
+                Console.WriteLine("\nХод игрока 1:");
+                PlayerTurn(player1, player1Deck, player1Spells, player2);
+                firstPlayer = 2; // Передаем ход игроку 2
+            }
+            else
+            {
+                Console.WriteLine("\nХод игрока 2:");
+                PlayerTurn(player2, player2Deck, player2Spells, player1);
+                firstPlayer = 1; // Передаем ход игроку 1
+            }
+
+            // Сохранение состояния игры после каждого хода
+            SaveGame();
+
+            // Проверка условий окончания игры
+            if (IsGameOver(player1, player2))
+            {
+                gameRunning = false; // Остановить игру, если условия выполнены
+            }
+        }
+
+        Console.WriteLine("Игра окончена!");
+    }
+
+    private static void StartNewGame()
+    {
+        // Выбор колод игроками
+        int player1DeckIndex = ChooseDeck(1);
+        int player2DeckIndex = ChooseDeck(2);
+
+        // Проверка на одинаковые колоды
+        while (player1DeckIndex == player2DeckIndex)
+        {
+            Console.WriteLine("Игроки не могут выбрать одинаковые колоды. Пожалуйста, выберите другую колоду для игрока 2.");
+            player2DeckIndex = ChooseDeck(2);
+        }
+
+        // Получение колод для игроков
+        player1Deck = creatureDecks[player1DeckIndex];
+        player2Deck = creatureDecks[player2DeckIndex];
+        player1Spells = spellDecks[player1DeckIndex]; // Инициализация заклинаний для игрока 1
+        player2Spells = spellDecks[player2DeckIndex]; // Инициализация заклинаний для игрока 2
+
+        // Создание игроков
+        player1 = new Player();
+        player2 = new Player();
+
+        // Вывод доступных существ и заклинаний
+        DisplayAvailableCards(player1Deck, player1Spells, 1);
+        DisplayAvailableCards(player2Deck, player2Spells, 2);
+
+        // Запуск игрового цикла
+        StartGameLoop();
+    }
+
+    private static void SaveGame()
+    {
+        using (StreamWriter writer = new StreamWriter("SaveStats.txt"))
+        {
+            writer.WriteLine("/Игрок 1");
+            writer.WriteLine(player1.Health);
+            writer.WriteLine(string.Join(" ", player1.Creatures.ConvertAll(c => c.Name)));
+            writer.WriteLine("/Игрок 2");
+            writer.WriteLine(player2.Health);
+            writer.WriteLine(string.Join(" ", player2.Creatures.ConvertAll(c => c.Name)));
+        }
+    }
+
+    private static void LoadGame()
+    {
+        using (StreamReader reader = new StreamReader("SaveStats.txt"))
+        {
+            string line;
+            if ((line = reader.ReadLine()) != null && line == "/Игрок 1")
+            {
+                player1.Health = int.Parse(reader.ReadLine());
+                string creaturesLine = reader.ReadLine();
+                if (!string.IsNullOrEmpty(creaturesLine))
+                {
+                    string[] creatures = creaturesLine.Split(' ');
+                    foreach (var creatureName in creatures)
+                    {
+                        CreatureCard creature = FindCreatureByName(creatureName);
+                        if (creature != null)
+                        {
+                            player1.Creatures.Add(creature);
+                        }
+                    }
+                }
+                Console.WriteLine("Игрок 1 загружен: Здоровье = " + player1.Health);
+            }
+
+            if ((line = reader.ReadLine()) != null && line == "/Игрок 2")
+            {
+                player2.Health = int.Parse(reader.ReadLine());
+                string creaturesLine = reader.ReadLine();
+                if (!string.IsNullOrEmpty(creaturesLine))
+                {
+                    string[] creatures = creaturesLine.Split(' ');
+                    foreach (var creatureName in creatures)
+                    {
+                        CreatureCard creature = FindCreatureByName(creatureName);
+                        if (creature != null)
+                        {
+                            player2.Creatures.Add(creature);
+                        }
+                    }
+                }
+                Console.WriteLine("Игрок 2 загружен: Здоровье = " + player2.Health);
+            }
+
+            // Загрузка колод и заклинаний
+            player1Deck = LoadDeck(reader);
+            player2Deck = LoadDeck(reader);
+            player1Spells = LoadSpells(reader);
+            player2Spells = LoadSpells(reader);
+        }
+
+        // Запуск игрового цикла после загрузки
+        StartGameLoop();
+    }
+
+
+
+    private static CreatureCard FindCreatureByName(string name)
+    {
+        foreach (var deck in creatureDecks)
+        {
+            foreach (var creature in deck)
+            {
+                if (creature.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Возвращаем копию существа, чтобы не изменять оригинал в колоде
+                    return new CreatureCard(creature.Name, creature.Description, creature.Attack, creature.Health);
+                }
+            }
+        }
+        return null; // Если существо не найдено
+    }
+
+    private static void DisplayGameRules()
+    {
+        Console.WriteLine("Правила игры:");
+        Console.WriteLine("1. Главная задача игры уничтожить своего опонента.");
+        Console.WriteLine("2. Вы можете в 1 ход выполнять одно из указанных действий: разыграть существо, применить заклинание, атаковать существом.");
+        Console.WriteLine("   Если у вас закончились существа, либо на столе нет существ для атаки, ход переходит к оппоненту за невнимательность.");
+        Console.WriteLine("3. Существа находятся в ограниченном количестве, и разыгрывать их нужно с умом.");
+        Console.WriteLine("4. Игра заканчивается, когда у одного из игроков заканчивается здоровье.");
+        Console.WriteLine();
+    }
+
     private static void DisplayAvailableCards(List<CreatureCard> playerDeck, List<Spell> playerSpells, int playerNumber)
     {
         Console.WriteLine($"\nДоступные существа игрока {playerNumber}:");
@@ -241,9 +305,64 @@ public class Program
             Console.WriteLine($"{i}: {playerSpells[i].Name} - {playerSpells[i].Description}");
         }
     }
+    private static List<Spell> LoadSpells(StreamReader reader)
+    {
+        List<Spell> spells = new List<Spell>();
+
+        // Считываем строку с заклинаниями
+        string spellsLine = reader.ReadLine();
+        if (!string.IsNullOrEmpty(spellsLine))
+        {
+            string[] spellNames = spellsLine.Split(' ');
+            foreach (var spellName in spellNames)
+            {
+                Spell spell = FindSpellByName(spellName);
+                if (spell != null)
+                {
+                    spells.Add(spell);
+                }
+            }
+        }
+
+        return spells;
+    }
+    private static Spell FindSpellByName(string name)
+    {
+
+        return allSpells.FirstOrDefault(spell => spell.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    }
+    private static List<CreatureCard> LoadDeck(StreamReader reader)
+    {
+        List<CreatureCard> deck = new List<CreatureCard>();
+
+        // Считываем строку с существами
+        string creaturesLine = reader.ReadLine();
+        if (!string.IsNullOrEmpty(creaturesLine))
+        {
+            string[] creatureNames = creaturesLine.Split(' ');
+            foreach (var creatureName in creatureNames)
+            {
+                CreatureCard creature = FindCreatureByName(creatureName);
+                if (creature != null)
+                {
+                    deck.Add(creature);
+                }
+            }
+        }
+
+        return deck;
+    }
 
     private static void PlayerTurn(Player currentPlayer, List<CreatureCard> playerDeck, List<Spell> playerSpells, Player opponent)
     {
+        // Проверка на null
+        if (playerDeck == null || playerSpells == null)
+        {
+            Console.WriteLine("Ошибка: колода или заклинания не инициализированы.");
+            return;
+        }
+
         Console.WriteLine($"Текущее здоровье игрока: {currentPlayer.Health}");
         Console.WriteLine("Выберите действие: 1 - Разыграть существо, 2 - Применить заклинание, 3 - Атаковать существом");
 
@@ -427,7 +546,7 @@ public class Program
             }
             else
             {
-                Console.WriteLine("У вас нет существ для атаки! Вы можете разыграть существо или использовать заклинание.");
+                Console.WriteLine("У вас нет существ для атаки!");
             }
         }
         else
@@ -508,7 +627,7 @@ public class Program
         {
             new CreatureCard("Гоблин", "Маленький, но хитрый.", 2, 3),
             new CreatureCard("Огур", "Большой и сильный.", 5, 7),
-            new CreatureCard("Эльф", "Ловкий стрелок.", 3, 2),
+            new CreatureCard("Э льф", "Ловкий стрелок.", 3, 2),
             new CreatureCard("Тролль", "Медленный, но мощный.", 6, 10)
         };
     }
@@ -577,8 +696,8 @@ public class Program
     {
         return new List<Spell>
         {
-            new HealingSpell("Божественное исцеление", "Восстанавливает 10 здоровья цели.", 10),
-            new DamageSpell("Теневой удар", "Наносит 9 урона врагу.", 9)
+            new HealingSpell("Божественное исцеление", "Восстанавливает 4 здоровья цели.", 4),
+            new DamageSpell("Теневой удар", "Наносит 7 урона врагу.", 7)
         };
     }
 }
